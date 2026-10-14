@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VICE CITY 3D - NEXT-GEN OPEN WORLD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;0,900;1,900&family=Orbitron:wght@600;900&family=Permanent+Marker&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --vc-pink: #ff2a85;
+      --vc-cyan: #00f0ff;
+      --vc-purple: #962eff;
+      --vc-gold: #ffbe0b;
+      --vc-dark: #0d0614;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #05020a;
+      font-family: 'Montserrat', sans-serif;
+      color: #fff;
+    }
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    canvas#game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease-out;
+    }
+    .crosshair-dot {
+      width: 6px;
+      height: 6px;
+      background: #00f0ff;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #00f0ff, 0 0 15px #00f0ff;
+    }
+    .crosshair-reticle {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border: 2px solid rgba(0, 240, 255, 0.6);
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+      transition: transform 0.15s ease-out, border-color 0.1s;
+    }
+    #crosshair.aiming .crosshair-reticle {
+      transform: scale(0.7);
+      border-color: #ff2a85;
+      box-shadow: 0 0 14px #ff2a85;
+    }
+    #hitmarker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      z-index: 21;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+    #hitmarker::before, #hitmarker::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 3px;
+      background: #ff0044;
+      box-shadow: 0 0 8px #ff0044;
+      border-radius: 2px;
+    }
+    #hitmarker::before { transform: translate(-50%, -50%) rotate(45deg); }
+    #hitmarker::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    #hitmarker.active { opacity: 1; }
+
+    /* HUD OVERLAY */
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* TOP BAR */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+    }
+    .brand-title {
+      font-family: 'Permanent Marker', cursive;
+      font-size: 28px;
+      color: #fff;
+      text-shadow: 0 0 10px var(--vc-pink), 0 0 20px var(--vc-pink), 2px 2px 0 var(--vc-cyan);
+      letter-spacing: 2px;
+      transform: rotate(-3deg);
+    }
+    .brand-sub {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      color: var(--vc-cyan);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-shadow: 0 0 8px var(--vc-cyan);
+      margin-top: 2px;
+    }
+
+    /* TOP RIGHT STATS (GTA STYLE) */
+    .player-stats-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .money-display {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 32px;
+      font-weight: 900;
+      color: #4dfc54;
+      text-shadow: 0 0 12px rgba(77, 252, 84, 0.7), 2px 2px 0 #073809;
+      letter-spacing: 2px;
+    }
+    .vitals-container {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      background: rgba(13, 6, 20, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 42, 133, 0.3);
+      padding: 8px 16px;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    }
+    .vital-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .vital-icon {
+      font-size: 16px;
+      font-weight: 900;
+    }
+    .vital-bar-track {
+      width: 120px;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .vital-bar-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.2s ease-out;
+    }
+    .vital-bar-fill.health {
+      background: linear-gradient(90deg, #ff0055, #ff4d8d);
+      box-shadow: 0 0 10px #ff0055;
+    }
+    .vital-bar-fill.armor {
+      background: linear-gradient(90deg, #0099ff, #00f0ff);
+      box-shadow: 0 0 10px #00f0ff;
+    }
+
+    /* WEAPON HUD */
+    .weapon-hud {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(13, 6, 20, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      padding: 6px 14px;
+      border-radius: 8px;
+    }
+    .weapon-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--vc-cyan);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .ammo-count {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 900;
+      color: #fff;
+    }
+    .ammo-max {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* WANTED STARS */
+    .wanted-stars {
+      display: flex;
+      gap: 6px;
+      font-size: 26px;
+      filter: drop-shadow(0 0 8px rgba(0,0,0,0.8));
+    }
+    .wanted-star {
+      color: rgba(255, 255, 255, 0.2);
+      transition: color 0.2s, transform 0.2s;
+    }
+    .wanted-star.active {
+      color: #ffbe0b;
+      text-shadow: 0 0 12px #ffbe0b, 0 0 24px #ff5500;
+      animation: starFlash 0.7s infinite alternate;
+    }
+    @keyframes starFlash {
+      0% { color: #ffbe0b; transform: scale(1); }
+      100% { color: #ff0055; transform: scale(1.15); }
+    }
+
+    /* BOTTOM ROW: RADAR & CAR INFO */
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 100%;
+    }
+    .radar-wrapper {
+      position: relative;
+      width: 190px;
+      height: 190px;
+      background: rgba(10, 6, 18, 0.85);
+      border-radius: 50%;
+      border: 3px solid var(--vc-pink);
+      box-shadow: 0 0 20px rgba(255, 42, 133, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #radar-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+    }
+    .radar-compass {
+      position: absolute;
+      top: 6px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--vc-cyan);
+      text-shadow: 0 0 6px var(--vc-cyan);
+      pointer-events: none;
+    }
+    .zone-name {
+      margin-top: 8px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 1px;
+      background: rgba(13, 6, 20, 0.75);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border-left: 3px solid var(--vc-pink);
+    }
+
+    /* VEHICLE HUD */
+    #vehicle-hud {
+      display: none;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      background: rgba(13, 6, 20, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      padding: 12px 20px;
+      border-radius: 8px;
+    }
+    .car-name {
+      font-family: 'Permanent Marker', cursive;
+      font-size: 20px;
+      color: var(--vc-pink);
+      text-shadow: 0 0 8px var(--vc-pink);
+    }
+    .speedometer {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 36px;
+      font-weight: 900;
+      color: #fff;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .speed-unit {
+      font-size: 14px;
+      color: var(--vc-cyan);
+    }
+    .radio-banner {
+      font-size: 12px;
+      color: var(--vc-gold);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* CENTER NOTIFICATIONS */
+    #announcement {
+      position: absolute;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px var(--vc-pink);
+      background: rgba(13, 6, 20, 0.85);
+      border: 2px solid var(--vc-pink);
+      padding: 12px 32px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      z-index: 30;
+    }
+    #announcement.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* INTERACTION PROMPT */
+    #interaction-prompt {
+      position: absolute;
+      bottom: 25%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid var(--vc-cyan);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      display: none;
+      z-index: 25;
+      letter-spacing: 1px;
+    }
+    #interaction-prompt .key-tag {
+      background: var(--vc-cyan);
+      color: #000;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 900;
+      margin-right: 6px;
+    }
+
+    /* CONTROLS OVERLAY */
+    #controls-hint {
+      position: absolute;
+      bottom: 24px;
+      left: 230px;
+      background: rgba(10, 6, 18, 0.7);
+      backdrop-filter: blur(4px);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      line-height: 1.6;
+      border-left: 2px solid var(--vc-cyan);
+      pointer-events: none;
+    }
+    #controls-hint span {
+      color: var(--vc-cyan);
+      font-weight: 700;
+    }
+
+    /* WORLD MAP MODAL */
+    #map-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 2, 10, 0.94);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #map-modal.open {
+      display: flex;
+    }
+    .map-header {
+      width: 90%;
+      max-width: 900px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .map-title {
+      font-family: 'Permanent Marker', cursive;
+      font-size: 32px;
+      color: var(--vc-pink);
+      text-shadow: 0 0 15px var(--vc-pink);
+    }
+    .map-close-btn {
+      background: var(--vc-pink);
+      border: none;
+      color: #fff;
+      padding: 8px 20px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 0 15px var(--vc-pink);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .map-close-btn:hover {
+      transform: scale(1.05);
+      background: #ff0055;
+    }
+    .map-frame {
+      width: 90%;
+      max-width: 900px;
+      height: 70vh;
+      border: 3px solid var(--vc-cyan);
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+      border-radius: 12px;
+      position: relative;
+      background: #08121e;
+      overflow: hidden;
+    }
+    #full-map-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .map-legend {
+      width: 90%;
+      max-width: 900px;
+      margin-top: 12px;
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+
+    /* CLICK TO PLAY SCREEN */
+    #start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #1a0826 0%, #06020c 100%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+    .game-logo {
+      font-family: 'Permanent Marker', cursive;
+      font-size: 68px;
+      color: #fff;
+      text-shadow: 0 0 20px var(--vc-pink), 0 0 40px var(--vc-pink), 4px 4px 0 var(--vc-cyan);
+      transform: rotate(-3deg);
+      margin-bottom: 6px;
+    }
+    .game-subtitle {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      color: var(--vc-cyan);
+      letter-spacing: 6px;
+      margin-bottom: 36px;
+      text-shadow: 0 0 12px var(--vc-cyan);
+    }
+    .start-btn {
+      background: linear-gradient(135deg, var(--vc-pink), #962eff);
+      color: #fff;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      border: none;
+      padding: 16px 48px;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 0 30px var(--vc-pink);
+      transition: all 0.2s ease;
+      animation: pulseBtn 1.8s infinite;
+    }
+    .start-btn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 45px var(--vc-pink), 0 0 60px var(--vc-cyan);
+    }
+    @keyframes pulseBtn {
+      0% { box-shadow: 0 0 20px var(--vc-pink); }
+      50% { box-shadow: 0 0 40px var(--vc-pink), 0 0 20px var(--vc-cyan); }
+      100% { box-shadow: 0 0 20px var(--vc-pink); }
+    }
+    .features-list {
+      display: flex;
+      gap: 30px;
+      margin-top: 40px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    .feature-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <!-- CROSSHAIR -->
+  <div id="crosshair">
+    <div class="crosshair-reticle"></div>
+    <div class="crosshair-dot"></div>
+  </div>
+  <div id="hitmarker"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <!-- TOP ROW -->
+    <div class="top-bar">
+      <div>
+        <div class="brand-title">VICE CITY</div>
+        <div class="brand-sub">NEXT-GEN 3D ENGINE</div>
+      </div>
+
+      <div class="player-stats-panel">
+        <div class="money-display" id="hud-money">$0002500</div>
+
+        <div class="wanted-stars" id="hud-stars">
+          <span class="wanted-star">★</span>
+          <span class="wanted-star">★</span>
+          <span class="wanted-star">★</span>
+          <span class="wanted-star">★</span>
+          <span class="wanted-star">★</span>
+        </div>
+
+        <div class="vitals-container">
+          <div class="vital-item">
+            <span class="vital-icon" style="color:#ff0055;">+</span>
+            <div class="vital-bar-track">
+              <div class="vital-bar-fill health" id="hud-health" style="width: 100%;"></div>
+            </div>
+          </div>
+          <div class="vital-item">
+            <span class="vital-icon" style="color:#00f0ff;">🛡</span>
+            <div class="vital-bar-track">
+              <div class="vital-bar-fill armor" id="hud-armor" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="weapon-hud">
+          <div class="weapon-name" id="hud-weapon-name">M4 RIFLE</div>
+          <div class="ammo-count"><span id="hud-ammo-clip">30</span><span class="ammo-max"> / <span id="hud-ammo-reserve">180</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATION / ANNOUNCEMENT -->
+    <div id="announcement">WANTED: 2 STARS</div>
+
+    <!-- INTERACTION PROMPT -->
+    <div id="interaction-prompt"><span class="key-tag">F</span> ENTER VEHICLE</div>
+
+    <!-- BOTTOM ROW -->
+    <div class="bottom-bar">
+      <div>
+        <div class="radar-wrapper">
+          <canvas id="radar-canvas" width="220" height="220"></canvas>
+          <div class="radar-compass">N</div>
+        </div>
+        <div class="zone-name" id="hud-zone">OCEAN BEACH BOULEVARD</div>
+      </div>
+
+      <div id="controls-hint">
+        <span>WASD</span> Move / Drive &nbsp;|&nbsp; <span>MOUSE</span> Look & Aim<br>
+        <span>L-CLICK</span> Attack / Auto-Fire &nbsp;|&nbsp; <span>R-CLICK</span> Aim Zoom (ADS)<br>
+        <span>V / C</span> <b>Toggle 1st Person POV / 3rd Person</b><br>
+        <span>F / ENTER</span> Jack / Exit Car &nbsp;|&nbsp; <span>SPACE</span> Jump / Handbrake<br>
+        <span>SHIFT</span> Sprint &nbsp;|&nbsp; <span>1-6</span> Weapons &nbsp;|&nbsp; <span>M</span> World Map<br>
+        <span>R</span> Reload / Radio &nbsp;|&nbsp; <span>E</span> Horn (Civilian) / Siren (Police)
+      </div>
+
+      <div id="vehicle-hud">
+        <div class="car-name" id="hud-car-name">INFERNUS GT</div>
+        <div class="speedometer"><span id="hud-speed">0</span> <span class="speed-unit">MPH</span></div>
+        <div class="radio-banner">📻 <span id="hud-radio">FLASH FM 105.8</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL MAP MODAL -->
+  <div id="map-modal">
+    <div class="map-header">
+      <div class="map-title">VICE CITY WORLD MAP</div>
+      <button class="map-close-btn" id="map-close-btn">ESC / RESUME</button>
+    </div>
+    <div class="map-frame">
+      <canvas id="full-map-canvas" width="900" height="700"></canvas>
+    </div>
+    <div class="map-legend">
+      <div class="legend-item"><div class="legend-icon" style="background:#00f0ff;"></div> Player (Tommy)</div>
+      <div class="legend-item"><div class="legend-icon" style="background:#ff0055;"></div> Police Cruiser / Cop</div>
+      <div class="legend-item"><div class="legend-icon" style="background:#ffbe0b;"></div> Civilian Vehicle</div>
+      <div class="legend-item"><div class="legend-icon" style="background:#4dfc54;"></div> Pay 'n' Spray Garage</div>
+      <div class="legend-item"><div class="legend-icon" style="background:#962eff;"></div> Ammu-Nation Gun Store</div>
+    </div>
+  </div>
+
+  <!-- START OVERLAY -->
+  <div id="start-screen">
+    <div class="game-logo">VICE CITY</div>
+    <div class="game-subtitle">NEXT-GEN OPEN WORLD ACTION</div>
+    <button class="start-btn" id="start-btn">PLAY NOW</button>
+    <div class="features-list">
+      <div class="feature-tag">🌴 Vice City 80s Aesthetics & Neon</div>
+      <div class="feature-tag">🚗 Driveable Cars & Traffic AI</div>
+      <div class="feature-tag">🚶 Pedestrians & Reactive NPCs</div>
+      <div class="feature-tag">🚓 5-Star Police Chases</div>
+      <div class="feature-tag">🔫 Arsenal & Combat</div>
+      <div class="feature-tag">🗺️ Dynamic Radar & Map</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
