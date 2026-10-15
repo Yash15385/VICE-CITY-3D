@@ -569,8 +569,55 @@
       align-items: center;
       gap: 8px;
     }
+
+    /* CINEMATIC SLEEP / WASTED OVERLAY */
+    #fade-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, rgba(16, 8, 28, 0.96) 0%, rgba(4, 2, 8, 0.99) 100%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 80;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease-in-out;
+    }
+    #fade-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    #fade-title {
+      font-family: 'Permanent Marker', cursive;
+      font-size: 64px;
+      color: var(--vc-cyan);
+      text-shadow: 0 0 25px var(--vc-cyan), 0 0 50px var(--vc-pink);
+      letter-spacing: 3px;
+      transform: scale(0.95);
+      transition: transform 0.4s ease;
+    }
+    #fade-overlay.active #fade-title {
+      transform: scale(1.05);
+    }
+    #fade-title.wasted {
+      color: #ff0044;
+      text-shadow: 0 0 30px #ff0044, 0 0 60px #ff0044;
+    }
+    #fade-sub {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--vc-yellow);
+      letter-spacing: 5px;
+      margin-top: 14px;
+      text-shadow: 0 0 12px var(--vc-yellow);
+    }
   </style>
-  <script type="module" crossorigin src="/assets/index-D_Gd_miw.js"></script>
+  <script type="module" crossorigin src="/assets/index-DKllOJWG.js"></script>
 </head>
 <body>
   <div id="game-container">
@@ -648,7 +695,7 @@
         <span>V / C</span> <b>Toggle 1st Person POV / 3rd Person</b><br>
         <span>F / ENTER</span> Jack / Exit Car &nbsp;|&nbsp; <span>SPACE</span> Jump / Handbrake<br>
         <span>SHIFT</span> Sprint &nbsp;|&nbsp; <span>1-6</span> Weapons &nbsp;|&nbsp; <span>M</span> World Map<br>
-        <span>R</span> Reload / Radio &nbsp;|&nbsp; <span>E</span> Horn (Civilian) / Siren (Police)
+        <span>R</span> Reload / Radio &nbsp;|&nbsp; <span>E</span> Horn / Siren / Sleep in Bed
       </div>
 
       <div id="vehicle-hud">
@@ -672,9 +719,16 @@
       <div class="legend-item"><div class="legend-icon" style="background:#00f0ff;"></div> Player (Tommy)</div>
       <div class="legend-item"><div class="legend-icon" style="background:#ff0055;"></div> Police Cruiser / Cop</div>
       <div class="legend-item"><div class="legend-icon" style="background:#ffbe0b;"></div> Civilian Vehicle</div>
+      <div class="legend-item"><div class="legend-icon" style="background:#ff2a85; box-shadow: 0 0 8px #ff2a85;"></div> 🏠 Tommy's Safehouse (Bed)</div>
       <div class="legend-item"><div class="legend-icon" style="background:#4dfc54;"></div> Pay 'n' Spray Garage</div>
       <div class="legend-item"><div class="legend-icon" style="background:#962eff;"></div> Ammu-Nation Gun Store</div>
     </div>
+  </div>
+
+  <!-- CINEMATIC SLEEP / WASTED OVERLAY -->
+  <div id="fade-overlay">
+    <div id="fade-title">🛏️ SLEEPING...</div>
+    <div id="fade-sub">RESPAWN POINT SAVED!</div>
   </div>
 
   <!-- START OVERLAY -->
@@ -686,6 +740,7 @@
       <div class="feature-tag">🌴 Vice City 80s Aesthetics & Neon</div>
       <div class="feature-tag">🚗 Driveable Cars & Traffic AI</div>
       <div class="feature-tag">🚶 Pedestrians & Reactive NPCs</div>
+      <div class="feature-tag">🏠 Safehouse & Bed Respawn</div>
       <div class="feature-tag">🚓 5-Star Police Chases</div>
       <div class="feature-tag">🔫 Arsenal & Combat</div>
       <div class="feature-tag">🗺️ Dynamic Radar & Map</div>

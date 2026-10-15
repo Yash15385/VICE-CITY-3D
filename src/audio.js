@@ -389,6 +389,49 @@ class SoundEngine {
     noise.start(this.ctx.currentTime);
     noise.stop(this.ctx.currentTime + duration);
   }
+
+  // --- SLEEP CHIME & WASTED SOUND ---
+  playSleepChime() {
+    if (!this.initialized) return;
+    this.resume();
+    const t = this.ctx.currentTime;
+    // Dreamy 80s synth chords: C4, E4, G4, B4, D5 (Major 9th chord)
+    const chord = [261.63, 329.63, 392.00, 493.88, 587.33];
+    chord.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const delay = idx * 0.08;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + delay);
+      gain.gain.setValueAtTime(0.001, t + delay);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + delay + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + 1.6);
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, t + delay);
+      filter.frequency.exponentialRampToValueAtTime(3200, t + delay + 0.3);
+      filter.frequency.exponentialRampToValueAtTime(400, t + delay + 1.5);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(t + delay);
+      osc.stop(t + delay + 1.7);
+    });
+  }
+
+  playWastedSound() {
+    if (!this.initialized) return;
+    this.resume();
+    const t = this.ctx.currentTime;
+    // Deep dramatic descending hit
+    this.playTone(85, 25, 2.2, 'sawtooth', 0.6);
+    this.playTone(130, 35, 1.8, 'triangle', 0.7);
+    this.playNoise(0.8, 450, 40, 0.4);
+  }
 }
 
 export const soundEngine = new SoundEngine();

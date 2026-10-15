@@ -9,7 +9,26 @@ export class Player {
 
     // Position & Transform
     this.mesh = new THREE.Group();
-    this.mesh.position.set(70, 0, -20); // Spawn safely on Ocean Drive sidewalk overlooking the beach
+    
+    // Spawn point (Minecraft-style saved bed respawn point)
+    let savedSpawn = null;
+    try {
+      const data = localStorage.getItem('vice_city_spawnpoint');
+      if (data) savedSpawn = JSON.parse(data);
+    } catch (e) {}
+
+    if (savedSpawn && typeof savedSpawn.x === 'number') {
+      this.spawnPoint = new THREE.Vector3(savedSpawn.x, savedSpawn.y, savedSpawn.z);
+      this.spawnHeading = savedSpawn.heading || -Math.PI / 2;
+      this.mesh.position.copy(this.spawnPoint);
+      this.mesh.rotation.y = this.spawnHeading;
+    } else {
+      // Default initial spawn in front of Tommy's Beachfront Safehouse
+      this.spawnPoint = new THREE.Vector3(72, 0, -18);
+      this.spawnHeading = -Math.PI / 2;
+      this.mesh.position.copy(this.spawnPoint);
+      this.mesh.rotation.y = this.spawnHeading;
+    }
 
     // Stats
     this.health = 100;
@@ -532,7 +551,7 @@ export class Player {
     soundEngine.playHitSound(true);
 
     if (this.health <= 0) {
-      this.die();
+      this.die(this.onDeath, this.onRespawn);
     }
   }
 
@@ -542,23 +561,50 @@ export class Player {
     soundEngine.playMoney();
   }
 
-  die() {
+  setSpawnPoint(pos, heading = -Math.PI / 2) {
+    this.spawnPoint = pos.clone();
+    this.spawnHeading = heading;
+    try {
+      localStorage.setItem('vice_city_spawnpoint', JSON.stringify({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        heading
+      }));
+    } catch (e) {}
+  }
+
+  die(onDeathCallback = null, onRespawnCallback = null) {
+    if (this.isDead) return;
     this.isDead = true;
     if (this.inVehicle) {
       this.exitVehicle();
     }
     this.mesh.rotation.x = -Math.PI / 2;
     this.mesh.position.y = 0.2;
+    soundEngine.playWastedSound();
+
+    if (onDeathCallback) {
+      onDeathCallback();
+    }
 
     setTimeout(() => {
-      // Respawn at Ocean View Hotel
-      this.health = 100;
-      this.armor = 50;
-      this.isDead = false;
-      this.mesh.rotation.x = 0;
-      this.mesh.position.set(60, 0, -50);
-      this.velocity.set(0, 0, 0);
+      this.respawn(onRespawnCallback);
     }, 3500);
+  }
+
+  respawn(callback = null) {
+    this.health = 100;
+    this.armor = 100;
+    this.isDead = false;
+    this.mesh.rotation.x = 0;
+    this.mesh.position.copy(this.spawnPoint);
+    this.mesh.rotation.y = this.spawnHeading || -Math.PI / 2;
+    this.velocity.set(0, 0, 0);
+
+    if (callback) {
+      callback();
+    }
   }
 
   update(delta, inputs, colliders) {

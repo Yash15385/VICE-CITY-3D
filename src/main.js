@@ -108,6 +108,17 @@ class Game {
     this.npcs = new NPCManager(this.scene, this.city, this.city.traffic);
     this.police = new PoliceSystem(this.scene, this.vehicles);
     this.weapons = new WeaponManager(this.scene, this.camera);
+    this.isSleeping = false;
+
+    // Player death and respawn callbacks
+    this.player.onDeath = () => {
+      this.ui.showWastedScreen(() => {
+        this.police.clearWantedLevel();
+      });
+    };
+    this.player.onRespawn = () => {
+      this.ui.showAnnouncement("RESPAWNED AT SAFEHOUSE BED", 3000);
+    };
   }
 
   startGame() {
@@ -152,7 +163,7 @@ class Game {
         }
       }
 
-      // Horn (Civilian) / Siren (Police)
+      // Horn (Civilian) / Siren (Police) OR Sleep in Bed (on foot)
       if (key === 'KeyE') {
         if (this.player.inVehicle && this.player.currentVehicle) {
           if (this.player.currentVehicle.type === 'police') {
@@ -163,6 +174,13 @@ class Game {
             // Usual cars have strictly the horn only!
             soundEngine.playHorn();
             this.ui.showAnnouncement("CAR HORN", 800);
+          }
+        } else if (!this.player.inVehicle) {
+          // Check if player is standing near Tommy's Safehouse Bed
+          const playerPos = this.player.mesh.position;
+          const bedZone = this.city.interactivityZones.find(z => z.type === 'safehouse_bed');
+          if (bedZone && bedZone.box.containsPoint(playerPos)) {
+            this.handleSleepInBed(bedZone.position);
           }
         }
       }
@@ -369,6 +387,8 @@ class Game {
             soundEngine.playMoney();
             this.ui.showAnnouncement("PAY 'N' SPRAY: REPAIRED & HEAT CLEARED!");
           }
+        } else if (zone.type === 'safehouse_bed' && !this.player.inVehicle) {
+          promptText = `<span class="key-tag">E</span> SLEEP IN BED (SET RESPAWN POINT)`;
         }
       }
     });
@@ -392,6 +412,30 @@ class Game {
       }
       this.ui.showAnnouncement(`POLICE CRATE: +$${copDrop.cash} & +${copDrop.ammo} AMMO`, 2000);
     }
+  }
+
+  handleSleepInBed(bedPos) {
+    if (this.isSleeping || this.player.isDead) return;
+    this.isSleeping = true;
+    soundEngine.playSleepChime();
+
+    // Set permanent spawn point to this safehouse bed
+    this.player.setSpawnPoint(bedPos.clone(), -Math.PI / 2);
+
+    this.ui.showSleepScreen(
+      () => {
+        // Midpoint of sleep fade: full heal, armor, and clear wanted heat
+        this.player.health = 100;
+        this.player.armor = 100;
+        this.police.clearWantedLevel();
+        this.weapons.refillAllAmmo();
+      },
+      () => {
+        // Awaken refreshed
+        this.isSleeping = false;
+        this.ui.showAnnouncement("RESPAWN POINT SET! HEALTH & ARMOR RESTORED", 3500);
+      }
+    );
   }
 
   animate() {

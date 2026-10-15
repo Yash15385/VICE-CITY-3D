@@ -18,6 +18,9 @@ export class UIManager {
     this.prompt = document.getElementById('interaction-prompt');
     this.announcement = document.getElementById('announcement');
     this.hitmarker = document.getElementById('hitmarker');
+    this.fadeOverlay = document.getElementById('fade-overlay');
+    this.fadeTitle = document.getElementById('fade-title');
+    this.fadeSub = document.getElementById('fade-sub');
 
     // Minimap Canvas
     this.radarCanvas = document.getElementById('radar-canvas');
@@ -93,6 +96,39 @@ export class UIManager {
     } else {
       this.prompt.style.display = 'none';
     }
+  }
+
+  showSleepScreen(onMidpoint = null, onComplete = null) {
+    if (!this.fadeOverlay) return;
+    this.fadeTitle.className = '';
+    this.fadeTitle.innerText = '🛏️ SLEEPING...';
+    this.fadeSub.innerText = 'RESPAWN POINT SAVED! (HEALTH & ARMOR RESTORED)';
+    this.fadeOverlay.classList.add('active');
+
+    setTimeout(() => {
+      if (onMidpoint) onMidpoint();
+    }, 700);
+
+    setTimeout(() => {
+      this.fadeOverlay.classList.remove('active');
+      if (onComplete) onComplete();
+    }, 1800);
+  }
+
+  showWastedScreen(onRespawn = null) {
+    if (!this.fadeOverlay) return;
+    this.fadeTitle.className = 'wasted';
+    this.fadeTitle.innerText = 'WASTED';
+    this.fadeSub.innerText = 'RESPAWNING AT SAFEHOUSE BED...';
+    this.fadeOverlay.classList.add('active');
+
+    setTimeout(() => {
+      if (onRespawn) onRespawn();
+    }, 2500);
+
+    setTimeout(() => {
+      this.fadeOverlay.classList.remove('active');
+    }, 3500);
   }
 
   updateHUD(player, weaponMgr, policeSystem) {
@@ -238,6 +274,16 @@ export class UIManager {
         ctx.fillStyle = '#ff0055'; // Pink Gun
         ctx.beginPath();
         ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (zone.type === 'safehouse_bed') {
+        // Safehouse House/Bed icon
+        ctx.fillStyle = '#ff2a85';
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#00f0ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -395,6 +441,18 @@ export class UIManager {
         ctx.font = '700 11px sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText("Ammu-Nation", 0, -12);
+      } else if (zone.type === 'safehouse_bed') {
+        ctx.fillStyle = '#ff2a85';
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#00f0ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = '900 12px "Orbitron", sans-serif';
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillText("🏠 SAFEHOUSE (BED)", 0, -15);
       }
       ctx.restore();
     });
