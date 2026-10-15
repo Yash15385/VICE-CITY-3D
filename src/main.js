@@ -409,13 +409,13 @@ class Game {
       // 1. Update City animations (water waves, palm trees, signs)
       this.city.update(delta, time);
 
-      // 2. Update Player Controller
-      this.player.update(delta, this.inputs, this.city.colliders);
-
-      // 3. Update Vehicle Physics (if driving)
+      // 2. Update Vehicle Physics FIRST (if driving) to keep camera in frame-perfect sync
       if (this.player.inVehicle && this.player.currentVehicle) {
         this.player.currentVehicle.updatePhysics(delta, this.inputs, this.city.colliders);
       }
+
+      // 3. Update Player Controller & Camera
+      this.player.update(delta, this.inputs, this.city.colliders);
 
       const playerPos = this.player.inVehicle && this.player.currentVehicle
         ? this.player.currentVehicle.mesh.position

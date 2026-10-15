@@ -9,7 +9,7 @@ export class Player {
 
     // Position & Transform
     this.mesh = new THREE.Group();
-    this.mesh.position.set(60, 0, -20); // Spawn on Ocean Drive sidewalk
+    this.mesh.position.set(70, 0, -20); // Spawn safely on Ocean Drive sidewalk overlooking the beach
 
     // Stats
     this.health = 100;
@@ -512,6 +512,13 @@ export class Player {
     soundEngine.stopEngineSound();
     soundEngine.stopRadio();
     this.currentVehicle = null;
+
+    if (this.camera) {
+      this.camera.fov = 65;
+      this.camera.updateProjectionMatrix();
+    }
+    this.smoothedCamPos = null;
+    this.smoothedCamTarget = null;
   }
 
   takeDamage(amount) {
@@ -822,26 +829,47 @@ export class Player {
     const veh = this.currentVehicle;
     if (!veh) return;
 
+    if (!this.smoothedCamPos) {
+      this.smoothedCamPos = this.camera.position.clone();
+      this.smoothedCamTarget = veh.mesh.position.clone().add(new THREE.Vector3(0, 1.25, 0));
+    }
+
     if (this.cameraMode === 'FIRST_PERSON') {
-      // First Person Dashboard / Hood Camera
-      const hoodOffset = new THREE.Vector3(0, 1.4, -0.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), veh.mesh.rotation.y);
+      // First Person Dashboard / Hood Camera - zero latency, rock-solid lockstep
+      const hoodOffset = new THREE.Vector3(0, 1.35, -0.65).applyAxisAngle(new THREE.Vector3(0, 1, 0), veh.mesh.rotation.y);
       const camPos = veh.mesh.position.clone().add(hoodOffset);
-      this.camera.position.lerp(camPos, 0.35);
+      this.camera.position.copy(camPos);
 
       const fwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), veh.mesh.rotation.y);
-      this.camera.lookAt(camPos.clone().addScaledVector(fwd, 15));
+      this.camera.lookAt(camPos.clone().addScaledVector(fwd, 20));
     } else {
-      // Third Person Chase Camera behind vehicle
+      // Third Person Chase Camera - Silky smooth trailing with spring dampening
       const rearVec = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), veh.mesh.rotation.y);
-      const camTarget = veh.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+      const rawTarget = veh.mesh.position.clone().add(new THREE.Vector3(0, 1.25, 0));
 
-      const chaseDist = this.cameraMode === 'THIRD_SHOULDER' ? 5.2 : 7.5;
-      const chaseHeight = 2.8;
-      const desiredPos = camTarget.clone().addScaledVector(rearVec, chaseDist).add(new THREE.Vector3(0, chaseHeight, 0));
+      const chaseDist = this.cameraMode === 'THIRD_SHOULDER' ? 5.2 : 7.2;
+      const chaseHeight = 2.6;
+      const desiredPos = rawTarget.clone().addScaledVector(rearVec, chaseDist).add(new THREE.Vector3(0, chaseHeight, 0));
 
-      this.camera.position.lerp(desiredPos, 0.16);
-      this.camera.lookAt(camTarget);
+      // Framerate-independent exponential smoothing
+      const posFollowRate = 14.0;
+      const targetFollowRate = 18.0;
+
+      const posDamp = 1.0 - Math.exp(-posFollowRate * delta);
+      const targetDamp = 1.0 - Math.exp(-targetFollowRate * delta);
+
+      this.smoothedCamPos.lerp(desiredPos, posDamp);
+      this.smoothedCamTarget.lerp(rawTarget, targetDamp);
+
+      this.camera.position.copy(this.smoothedCamPos);
+      this.camera.lookAt(this.smoothedCamTarget);
     }
+
+    // Dynamic FOV sensation of speed
+    const speedRatio = Math.min(1.0, Math.abs(veh.speed) / (veh.maxSpeed || 40));
+    const targetFov = THREE.MathUtils.lerp(65, 75, speedRatio);
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 8, delta);
+    this.camera.updateProjectionMatrix();
   }
 
   getFireOrigin() {

@@ -12,14 +12,15 @@ export class Vehicle {
 
     // Physics parameters
     this.speed = 0;
-    this.maxSpeed = type === 'sports' ? 38 : type === 'police' ? 34 : 28; // units per second
-    this.acceleration = type === 'sports' ? 22 : 18;
-    this.reverseSpeed = 12;
+    // Physics parameters - High responsiveness, zero sluggishness
+    this.speed = 0;
+    this.maxSpeed = type === 'sports' ? 44 : type === 'police' ? 40 : type === 'muscle' ? 38 : 32; // units per second
+    this.acceleration = type === 'sports' ? 32 : type === 'police' ? 28 : type === 'muscle' ? 30 : 22;
+    this.reverseSpeed = 15;
     this.steeringAngle = 0;
-    this.maxSteeringAngle = 0.6; // radians
-    this.turnSpeed = 2.4;
-    this.friction = 0.985;
-    this.brakeForce = 28;
+    this.maxSteeringAngle = 0.58; // radians
+    this.turnSpeed = 4.8; // Fast, immediate steering response
+    this.brakeForce = 42;
     this.isBraking = false;
     this.isDrifting = false;
 
@@ -39,6 +40,7 @@ export class Vehicle {
 
     this.wheelMeshes = [];
     this.frontWheelGroups = [];
+    this.bodyGroup = new THREE.Group();
 
     this.buildModel();
     this.scene.add(this.mesh);
@@ -56,6 +58,9 @@ export class Vehicle {
     else if (this.type === 'muscle') bodyColor = 0x00d2ff; // Cyan Blue
     else if (isPolice) bodyColor = 0xffffff;
 
+    // Body Group for suspension roll and pitch dynamics
+    this.mesh.add(this.bodyGroup);
+
     // 1. Main Chassis
     const chassisGeo = new THREE.BoxGeometry(2.1, 0.75, 4.4);
     const chassisMat = new THREE.MeshStandardMaterial({
@@ -72,7 +77,7 @@ export class Vehicle {
     chassis.position.y = 0.65;
     chassis.castShadow = true;
     chassis.receiveShadow = true;
-    this.mesh.add(chassis);
+    this.bodyGroup.add(chassis);
 
     // 2. Cabin / Roof & Windows
     const cabinGeo = isSports ? new THREE.BoxGeometry(1.8, 0.55, 2.2) : new THREE.BoxGeometry(1.9, 0.65, 2.5);
@@ -84,26 +89,26 @@ export class Vehicle {
     const cabin = new THREE.Mesh(cabinGeo, glassMat);
     cabin.position.set(0, 1.25, isSports ? -0.2 : 0);
     cabin.castShadow = true;
-    this.mesh.add(cabin);
+    this.bodyGroup.add(cabin);
 
     // Roof Top
     const roofGeo = new THREE.BoxGeometry(1.78, 0.08, isSports ? 2.1 : 2.4);
     const roof = new THREE.Mesh(roofGeo, chassisMat);
     roof.position.set(0, isSports ? 1.55 : 1.6, isSports ? -0.2 : 0);
-    this.mesh.add(roof);
+    this.bodyGroup.add(roof);
 
     // 3. Sports Rear Spoiler
     if (isSports) {
       const wingGeo = new THREE.BoxGeometry(2.1, 0.08, 0.4);
       const wing = new THREE.Mesh(wingGeo, chassisMat);
       wing.position.set(0, 1.25, 2.0);
-      this.mesh.add(wing);
+      this.bodyGroup.add(wing);
 
       [-0.8, 0.8].forEach(sx => {
         const postGeo = new THREE.BoxGeometry(0.08, 0.4, 0.2);
         const post = new THREE.Mesh(postGeo, chassisMat);
         post.position.set(sx, 1.05, 2.0);
-        this.mesh.add(post);
+        this.bodyGroup.add(post);
       });
     }
 
@@ -113,24 +118,24 @@ export class Vehicle {
       const barBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
       const barBase = new THREE.Mesh(barBaseGeo, barBaseMat);
       barBase.position.set(0, 1.7, 0);
-      this.mesh.add(barBase);
+      this.bodyGroup.add(barBase);
 
       // Red & Blue Emergency lights
       const redGeo = new THREE.BoxGeometry(0.55, 0.18, 0.3);
       this.redLightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
       this.redMesh = new THREE.Mesh(redGeo, this.redLightMat);
       this.redMesh.position.set(-0.35, 1.72, 0);
-      this.mesh.add(this.redMesh);
+      this.bodyGroup.add(this.redMesh);
 
       const blueGeo = new THREE.BoxGeometry(0.55, 0.18, 0.3);
       this.blueLightMat = new THREE.MeshBasicMaterial({ color: 0x0066ff });
       this.blueMesh = new THREE.Mesh(blueGeo, this.blueLightMat);
       this.blueMesh.position.set(0.35, 1.72, 0);
-      this.mesh.add(this.blueMesh);
+      this.bodyGroup.add(this.blueMesh);
 
       this.sirenLight = new THREE.PointLight(0xff0000, 0, 25);
       this.sirenLight.position.set(0, 2.0, 0);
-      this.mesh.add(this.sirenLight);
+      this.bodyGroup.add(this.sirenLight);
     }
 
     // 5. Headlights & Taillights
@@ -139,7 +144,7 @@ export class Vehicle {
       const headGeo = new THREE.BoxGeometry(0.35, 0.2, 0.1);
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(hx, 0.65, -2.22);
-      this.mesh.add(head);
+      this.bodyGroup.add(head);
     });
 
     const tailMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
@@ -147,7 +152,7 @@ export class Vehicle {
       const tailGeo = new THREE.BoxGeometry(0.35, 0.2, 0.1);
       const tail = new THREE.Mesh(tailGeo, tailMat);
       tail.position.set(tx, 0.65, 2.22);
-      this.mesh.add(tail);
+      this.bodyGroup.add(tail);
     });
 
     // 6. Wheels (4x)
@@ -189,20 +194,20 @@ export class Vehicle {
 
   updatePhysics(delta, inputs, colliders) {
     if (this.isWrecked) {
-      this.speed *= 0.92;
+      this.speed *= Math.exp(-2.5 * delta);
       return;
     }
 
     const { forward, backward, left, right, handbrake } = inputs;
 
-    // Steering input
+    // Steering input - Instantaneous feel with smooth damping
     if (left) {
       this.steeringAngle = Math.min(this.steeringAngle + this.turnSpeed * delta, this.maxSteeringAngle);
     } else if (right) {
       this.steeringAngle = Math.max(this.steeringAngle - this.turnSpeed * delta, -this.maxSteeringAngle);
     } else {
-      // Return to center
-      this.steeringAngle *= 0.78;
+      // Fast smooth return to center
+      this.steeringAngle = THREE.MathUtils.damp(this.steeringAngle, 0, 14, delta);
     }
 
     // Front wheels visual steer
@@ -220,16 +225,16 @@ export class Vehicle {
         this.speed = Math.max(0, this.speed - this.brakeForce * delta);
       } else {
         // Reverse
-        this.speed = Math.max(this.speed - this.acceleration * 0.6 * delta, -this.reverseSpeed);
+        this.speed = Math.max(this.speed - this.acceleration * 0.7 * delta, -this.reverseSpeed);
       }
     } else {
-      // Natural friction
-      this.speed *= this.friction;
+      // Natural friction (delta-timed)
+      this.speed *= Math.exp(-0.75 * delta);
     }
 
     if (handbrake) {
-      this.speed *= 0.94;
-      this.isDrifting = Math.abs(this.speed) > 10;
+      this.speed = THREE.MathUtils.damp(this.speed, 0, 4.0, delta);
+      this.isDrifting = Math.abs(this.speed) > 7;
       if (this.isDrifting && Math.random() > 0.6) {
         soundEngine.playTireSkid();
       }
@@ -237,11 +242,33 @@ export class Vehicle {
       this.isDrifting = false;
     }
 
-    // Angular yaw rotation based on speed and steering
-    if (Math.abs(this.speed) > 0.2) {
+    // Dynamic Suspension Body Lean (Roll on turns, Pitch on accel/brake)
+    if (this.bodyGroup) {
+      const targetRoll = (this.steeringAngle / this.maxSteeringAngle) * Math.min(1.0, Math.abs(this.speed) / 10) * 0.085;
+      let targetPitch = 0;
+      if (this.isBraking) {
+        targetPitch = -0.045; // Front dives when braking
+      } else if (forward && this.speed > 0) {
+        targetPitch = 0.035; // Rear squats when accelerating
+      } else if (backward && this.speed < 0) {
+        targetPitch = -0.028;
+      }
+
+      this.bodyGroup.rotation.z = THREE.MathUtils.damp(this.bodyGroup.rotation.z, targetRoll, 12, delta);
+      this.bodyGroup.rotation.x = THREE.MathUtils.damp(this.bodyGroup.rotation.x, targetPitch, 12, delta);
+
+      // Subtle road micro-vibration when moving
+      const roadVibe = Math.abs(this.speed) > 0.5 ? Math.sin(performance.now() * 0.02) * 0.012 : 0;
+      this.bodyGroup.position.y = roadVibe;
+    }
+
+    // Angular yaw rotation based on speed and steering - responsive at all speeds!
+    if (Math.abs(this.speed) > 0.15) {
       const turnDir = this.speed >= 0 ? 1 : -1;
-      const driftFactor = this.isDrifting ? 1.6 : 1.0;
-      this.mesh.rotation.y += this.steeringAngle * (this.speed / this.maxSpeed) * this.turnSpeed * driftFactor * delta * turnDir;
+      const driftFactor = this.isDrifting ? 1.75 : 1.0;
+      // Responsive steering curve: full authority even at low/mid speeds
+      const speedFactor = Math.min(1.0, (Math.abs(this.speed) + 2.5) / 9.0);
+      this.mesh.rotation.y += this.steeringAngle * speedFactor * 2.4 * driftFactor * delta * turnDir;
     }
 
     // Linear translation along car's forward vector (-Z)
@@ -354,16 +381,18 @@ export class VehicleManager {
   }
 
   spawnInitialVehicles() {
-    // Spawn various civilian and sports cars on roads
+    // Spawn various civilian and sports cars in clean, open road lanes
     const spawns = [
-      { type: 'sports', x: 64, z: -80, heading: 0 },
-      { type: 'muscle', x: 56, z: 20, heading: Math.PI },
-      { type: 'taxi', x: -56, z: -120, heading: Math.PI },
-      { type: 'sports', x: -64, z: 80, heading: 0 },
-      { type: 'police', x: -115, z: 25, heading: Math.PI / 2 }, // Outside Police HQ
-      { type: 'police', x: -115, z: 35, heading: Math.PI / 2 },
-      { type: 'muscle', x: -184, z: -60, heading: 0 },
-      { type: 'taxi', x: 0, z: -104, heading: -Math.PI / 2 }
+      { type: 'sports', x: 64, z: -80, heading: 0 },             // Ocean Drive Northbound
+      { type: 'muscle', x: 56, z: 20, heading: Math.PI },          // Ocean Drive Southbound
+      { type: 'taxi', x: -56, z: -120, heading: Math.PI },         // Midtown Ave Southbound
+      { type: 'sports', x: -64, z: 80, heading: 0 },              // Midtown Ave Northbound
+      { type: 'police', x: -115, z: 25, heading: Math.PI / 2 },    // Police HQ parking
+      { type: 'police', x: -115, z: 35, heading: Math.PI / 2 },    // Police HQ parking
+      { type: 'muscle', x: -184, z: -60, heading: 0 },             // Downtown Ave Northbound
+      { type: 'taxi', x: -30, z: -104, heading: Math.PI / 2 },     // Cross Street Z = -100 Westbound towards Downtown
+      { type: 'sports', x: -60, z: -204, heading: Math.PI / 2 },   // North Perimeter Street Westbound
+      { type: 'muscle', x: -100, z: 204, heading: -Math.PI / 2 }   // South Perimeter Street Eastbound
     ];
 
     spawns.forEach(s => {
@@ -582,13 +611,117 @@ export class VehicleManager {
         inputs.handbrake = true;
       }
 
+      // F. SQUARED ROAD PERIMETER NAVIGATION & CORNER TURNING AI
+      // Ambient cars smoothly turn corners around the squared perimeter road instead of hitting borders or trees.
+      const wrapAngle = (a) => {
+        while (a > Math.PI) a -= Math.PI * 2;
+        while (a < -Math.PI) a += Math.PI * 2;
+        return a;
+      };
+
+      const isAvenue = Math.abs(forwardVec.z) > Math.abs(forwardVec.x);
+      let targetHeading = veh.mesh.rotation.y;
+      let isTurning = false;
+
+      if (isAvenue) {
+        // Driving North on Avenue (towards North border Z = -200)
+        if (forwardVec.z < 0 && veh.mesh.position.z <= -192) {
+          isTurning = true;
+          // Ocean Drive (X > 0) turns West onto North Street
+          // Downtown (X < -120) turns East onto North Street
+          // Midtown (X around -60) turns West onto North Street
+          if (veh.mesh.position.x > 0) {
+            targetHeading = Math.PI / 2; // Westbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, -204, 4.0, delta);
+          } else if (veh.mesh.position.x < -120) {
+            targetHeading = -Math.PI / 2; // Eastbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, -196, 4.0, delta);
+          } else {
+            targetHeading = Math.PI / 2; // Westbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, -204, 4.0, delta);
+          }
+        }
+        // Driving South on Avenue (towards South border Z = 200)
+        else if (forwardVec.z > 0 && veh.mesh.position.z >= 192) {
+          isTurning = true;
+          if (veh.mesh.position.x > 0) {
+            targetHeading = Math.PI / 2; // Westbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, 196, 4.0, delta);
+          } else if (veh.mesh.position.x < -120) {
+            targetHeading = -Math.PI / 2; // Eastbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, 204, 4.0, delta);
+          } else {
+            targetHeading = -Math.PI / 2; // Eastbound
+            veh.mesh.position.z = THREE.MathUtils.damp(veh.mesh.position.z, 204, 4.0, delta);
+          }
+        }
+      } else {
+        // Driving East on Street (towards Ocean Drive X = 60)
+        if (forwardVec.x > 0 && veh.mesh.position.x >= 52) {
+          isTurning = true;
+          if (veh.mesh.position.z <= -50) {
+            targetHeading = Math.PI; // Southbound
+            veh.mesh.position.x = THREE.MathUtils.damp(veh.mesh.position.x, 56, 4.0, delta);
+          } else {
+            targetHeading = 0; // Northbound
+            veh.mesh.position.x = THREE.MathUtils.damp(veh.mesh.position.x, 64, 4.0, delta);
+          }
+        }
+        // Driving West on Street (towards Downtown X = -180)
+        else if (forwardVec.x < 0 && veh.mesh.position.x <= -172) {
+          isTurning = true;
+          if (veh.mesh.position.z <= 0) {
+            targetHeading = Math.PI; // Southbound
+            veh.mesh.position.x = THREE.MathUtils.damp(veh.mesh.position.x, -176, 4.0, delta);
+          } else {
+            targetHeading = 0; // Northbound
+            veh.mesh.position.x = THREE.MathUtils.damp(veh.mesh.position.x, -184, 4.0, delta);
+          }
+        }
+      }
+
+      if (isTurning) {
+        const diff = wrapAngle(targetHeading - veh.mesh.rotation.y);
+        if (Math.abs(diff) > 0.04) {
+          veh.mesh.rotation.y += Math.sign(diff) * Math.min(Math.abs(diff), 2.4 * delta);
+          veh.speed = Math.min(veh.speed, 11);
+        }
+      } else {
+        // Keep smooth cardinal driving alignment along road lanes
+        let cardinalHeading = 0;
+        if (isAvenue) {
+          cardinalHeading = forwardVec.z < 0 ? 0 : Math.PI;
+        } else {
+          cardinalHeading = forwardVec.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+        }
+        const diff = wrapAngle(cardinalHeading - veh.mesh.rotation.y);
+        veh.mesh.rotation.y += Math.sign(diff) * Math.min(Math.abs(diff), 2.0 * delta);
+        if (veh.speed > 21) veh.speed = 21;
+      }
+
       veh.updatePhysics(delta, inputs, colliders);
 
-      // Loop cars around if they hit map bounds
-      if (veh.mesh.position.z > 240) veh.mesh.position.z = -240;
-      if (veh.mesh.position.z < -240) veh.mesh.position.z = 240;
-      if (veh.mesh.position.x > 80) veh.mesh.position.x = -190;
-      if (veh.mesh.position.x < -195) veh.mesh.position.x = 75;
+      // Fail-safe boundary recovery: safely keeps any car inside the squared perimeter road
+      if (veh.mesh.position.x > 67) {
+        veh.mesh.position.x = 64;
+        veh.mesh.rotation.y = 0;
+        veh.speed = Math.max(veh.speed, 8);
+      }
+      if (veh.mesh.position.x < -187) {
+        veh.mesh.position.x = -176;
+        veh.mesh.rotation.y = Math.PI;
+        veh.speed = Math.max(veh.speed, 8);
+      }
+      if (veh.mesh.position.z > 207) {
+        veh.mesh.position.z = 204;
+        veh.mesh.rotation.y = -Math.PI / 2;
+        veh.speed = Math.max(veh.speed, 8);
+      }
+      if (veh.mesh.position.z < -207) {
+        veh.mesh.position.z = -204;
+        veh.mesh.rotation.y = Math.PI / 2;
+        veh.speed = Math.max(veh.speed, 8);
+      }
     });
   }
 

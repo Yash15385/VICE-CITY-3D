@@ -67,12 +67,11 @@ export class TrafficSystem {
       // 3. West Crosswalk (across Street, North-South stripes) at x - 10
       // 4. East Crosswalk (across Street, North-South stripes) at x + 10
 
-      const crosswalkDefs = [
-        { type: 'across_avenue', side: 'north', center: new THREE.Vector3(x, 0.06, z - 10), spanAxis: 'x' },
-        { type: 'across_avenue', side: 'south', center: new THREE.Vector3(x, 0.06, z + 10), spanAxis: 'x' },
-        { type: 'across_street', side: 'west', center: new THREE.Vector3(x - 10, 0.06, z), spanAxis: 'z' },
-        { type: 'across_street', side: 'east', center: new THREE.Vector3(x + 10, 0.06, z), spanAxis: 'z' }
-      ];
+      const crosswalkDefs = [];
+      if (z > -200) crosswalkDefs.push({ type: 'across_avenue', side: 'north', center: new THREE.Vector3(x, 0.06, z - 10), spanAxis: 'x' });
+      if (z < 200) crosswalkDefs.push({ type: 'across_avenue', side: 'south', center: new THREE.Vector3(x, 0.06, z + 10), spanAxis: 'x' });
+      if (x > -180) crosswalkDefs.push({ type: 'across_street', side: 'west', center: new THREE.Vector3(x - 10, 0.06, z), spanAxis: 'z' });
+      if (x < 60) crosswalkDefs.push({ type: 'across_street', side: 'east', center: new THREE.Vector3(x + 10, 0.06, z), spanAxis: 'z' });
 
       crosswalkDefs.forEach((cw, idx) => {
         const group = new THREE.Group();
@@ -298,14 +297,14 @@ export class TrafficSystem {
       intersectionCorners.set(id, { nw, ne, sw, se });
 
       // Link corners across Zebra Crossings:
-      // North Crossing (NW <-> NE across Avenue)
-      linkNodes(nw, ne, true, 'north', id);
-      // South Crossing (SW <-> SE across Avenue)
-      linkNodes(sw, se, true, 'south', id);
-      // West Crossing (NW <-> SW across Street)
-      linkNodes(nw, sw, true, 'west', id);
-      // East Crossing (NE <-> SE across Street)
-      linkNodes(ne, se, true, 'east', id);
+      // North Crossing (NW <-> NE across Avenue if avenue continues north)
+      linkNodes(nw, ne, z > -200, 'north', id);
+      // South Crossing (SW <-> SE across Avenue if avenue continues south)
+      linkNodes(sw, se, z < 200, 'south', id);
+      // West Crossing (NW <-> SW across Street if street continues west)
+      linkNodes(nw, sw, x > -180, 'west', id);
+      // East Crossing (NE <-> SE across Street if street continues east)
+      linkNodes(ne, se, x < 60, 'east', id);
     });
 
     // 2. Link Intersections along Avenues with Sidewalk Waypoints

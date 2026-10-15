@@ -192,20 +192,20 @@ export class UIManager {
     ctx.fillStyle = '#d4a373';
     ctx.fillRect(sandScreenX, -300, (40) * radarScale, 600);
 
-    // 2. Draw Roads (Grey strips)
+    // 2. Draw Roads (Grey strips matching squared perimeter road)
     ctx.fillStyle = '#2b2d42';
-    // Vertical Avenues
+    // Vertical Avenues (spanning exactly from North Street Z = -208 to South Street Z = 208)
     [-180, -60, 60].forEach(rx => {
-      const x = (rx - pPos.x) * radarScale - 8;
-      const y = (-260 - pPos.z) * radarScale;
-      ctx.fillRect(x, y, 16 * radarScale, 520 * radarScale);
+      const x = (rx - 8 - pPos.x) * radarScale;
+      const y = (-208 - pPos.z) * radarScale;
+      ctx.fillRect(x, y, 16 * radarScale, 416 * radarScale);
     });
 
-    // Horizontal Streets
+    // Horizontal Streets (spanning exactly from West Avenue X = -188 to East Avenue X = 68)
     [-200, -100, 0, 100, 200].forEach(rz => {
-      const x = (-240 - pPos.x) * radarScale;
-      const y = (rz - pPos.z) * radarScale - 8;
-      ctx.fillRect(x, y, 320 * radarScale, 16 * radarScale);
+      const x = (-188 - pPos.x) * radarScale;
+      const y = (rz - 8 - pPos.z) * radarScale;
+      ctx.fillRect(x, y, 256 * radarScale, 16 * radarScale);
     });
 
     // 3. Draw Building footprints
@@ -335,14 +335,19 @@ export class UIManager {
     ctx.fillStyle = '#e9c46a';
     ctx.fillRect(toCanvasX(60), toCanvasZ(-240), 40 * mapScaleX, 480 * mapScaleZ);
 
-    // 3. Roads
+    // 3. Roads (clean squared perimeter boulevard)
     ctx.fillStyle = '#3d405b';
     [-180, -60, 60].forEach(rx => {
-      ctx.fillRect(toCanvasX(rx - 8), toCanvasZ(-250), 16 * mapScaleX, 500 * mapScaleZ);
+      ctx.fillRect(toCanvasX(rx - 8), toCanvasZ(-208), 16 * mapScaleX, 416 * mapScaleZ);
     });
     [-200, -100, 0, 100, 200].forEach(rz => {
-      ctx.fillRect(toCanvasX(-220), toCanvasZ(rz - 8), 280 * mapScaleX, 16 * mapScaleZ);
+      ctx.fillRect(toCanvasX(-188), toCanvasZ(rz - 8), 256 * mapScaleX, 16 * mapScaleZ);
     });
+
+    // Outer perimeter curb outline
+    ctx.strokeStyle = '#5a5d7a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(toCanvasX(-188), toCanvasZ(-208), 256 * mapScaleX, 416 * mapScaleZ);
 
     // 4. District Labels
     ctx.font = '900 16px "Orbitron", sans-serif';

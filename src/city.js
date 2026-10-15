@@ -87,55 +87,65 @@ export class City {
 
   buildRoadsAndSidewalks() {
     // Grid Road Layout:
-    // Vertical Avenues: X = -180, X = -60, X = 60 (Ocean Drive)
-    // Horizontal Cross Streets: Z = -200, Z = -100, Z = 0, Z = 100, Z = 200
+    // Vertical Avenues: X = -180 (Downtown West), X = -60 (Midtown Central), X = 60 (Ocean Drive East)
+    // Horizontal Cross Streets: Z = -200 (North Border), Z = -100, Z = 0, Z = 100, Z = 200 (South Border)
+    // The map is bounded by a closed squared perimeter ring road with no blank dead-ends.
     const avenueX = [-180, -60, 60];
     const streetZ = [-200, -100, 0, 100, 200];
     const roadWidth = 16;
     const sidewalkWidth = 4;
 
-    // 1. Long Vertical Avenues
+    // Squared Perimeter Extents:
+    // West outer road edge: X = -180 - 8 = -188
+    // East outer road edge: X = 60 + 8 = 68
+    // Total street span = 68 - (-188) = 256m (centered at X = -60)
+    // North outer road edge: Z = -200 - 8 = -208
+    // South outer road edge: Z = 200 + 8 = 208
+    // Total avenue span = 208 - (-208) = 416m (centered at Z = 0)
+    const avenueLength = 416;
+    const streetLength = 256;
+
+    // 1. Long Vertical Avenues (spans exactly from North Street to South Street)
     avenueX.forEach(x => {
-      const roadGeo = new THREE.PlaneGeometry(roadWidth, 520);
+      const roadGeo = new THREE.PlaneGeometry(roadWidth, avenueLength);
       const road = new THREE.Mesh(roadGeo, this.roadMat);
       road.rotation.x = -Math.PI / 2;
       road.position.set(x, 0.05, 0);
       road.receiveShadow = true;
       this.scene.add(road);
 
-      // Sidewalks flanking avenue
+      // Flanking Sidewalks
       [-1, 1].forEach(side => {
-        const swGeo = new THREE.PlaneGeometry(sidewalkWidth, 520);
+        const swGeo = new THREE.PlaneGeometry(sidewalkWidth, avenueLength);
         const sw = new THREE.Mesh(swGeo, this.sidewalkMat);
         sw.rotation.x = -Math.PI / 2;
         sw.position.set(x + side * (roadWidth / 2 + sidewalkWidth / 2), 0.12, 0);
         sw.receiveShadow = true;
         this.scene.add(sw);
 
-        // Add pedestrian path nodes along sidewalk
-        for (let z = -240; z <= 240; z += 40) {
+        for (let z = -190; z <= 190; z += 38) {
           this.pedestrianPaths.push(new THREE.Vector3(x + side * (roadWidth / 2 + sidewalkWidth / 2), 0.5, z));
         }
       });
 
       // Traffic Lane definitions
       this.roadNetwork.push({
-        start: new THREE.Vector3(x - 4, 0, -250),
-        end: new THREE.Vector3(x - 4, 0, 250),
-        dir: new THREE.Vector3(0, 0, 1),
+        start: new THREE.Vector3(x - 4, 0, 196),
+        end: new THREE.Vector3(x - 4, 0, -196),
+        dir: new THREE.Vector3(0, 0, -1),
         type: 'avenue'
       });
       this.roadNetwork.push({
-        start: new THREE.Vector3(x + 4, 0, 250),
-        end: new THREE.Vector3(x + 4, 0, -250),
-        dir: new THREE.Vector3(0, 0, -1),
+        start: new THREE.Vector3(x + 4, 0, -196),
+        end: new THREE.Vector3(x + 4, 0, 196),
+        dir: new THREE.Vector3(0, 0, 1),
         type: 'avenue'
       });
     });
 
-    // 2. Horizontal Cross Streets
+    // 2. Horizontal Cross Streets (spans exactly from West Avenue to East Avenue)
     streetZ.forEach(z => {
-      const roadGeo = new THREE.PlaneGeometry(280, roadWidth);
+      const roadGeo = new THREE.PlaneGeometry(streetLength, roadWidth);
       const road = new THREE.Mesh(roadGeo, this.roadMat);
       road.rotation.x = -Math.PI / 2;
       road.position.set(-60, 0.06, z);
@@ -144,31 +154,89 @@ export class City {
 
       // Sidewalks
       [-1, 1].forEach(side => {
-        const swGeo = new THREE.PlaneGeometry(280, sidewalkWidth);
+        const swGeo = new THREE.PlaneGeometry(streetLength, sidewalkWidth);
         const sw = new THREE.Mesh(swGeo, this.sidewalkMat);
         sw.rotation.x = -Math.PI / 2;
         sw.position.set(-60, 0.12, z + side * (roadWidth / 2 + sidewalkWidth / 2));
         sw.receiveShadow = true;
         this.scene.add(sw);
 
-        for (let x = -190; x <= 70; x += 40) {
+        for (let x = -170; x <= 50; x += 36) {
           this.pedestrianPaths.push(new THREE.Vector3(x, 0.5, z + side * (roadWidth / 2 + sidewalkWidth / 2)));
         }
       });
 
       this.roadNetwork.push({
-        start: new THREE.Vector3(-190, 0, z - 4),
-        end: new THREE.Vector3(70, 0, z - 4),
+        start: new THREE.Vector3(-176, 0, z + 4),
+        end: new THREE.Vector3(56, 0, z + 4),
         dir: new THREE.Vector3(1, 0, 0),
         type: 'street'
       });
       this.roadNetwork.push({
-        start: new THREE.Vector3(70, 0, z + 4),
-        end: new THREE.Vector3(-190, 0, z + 4),
+        start: new THREE.Vector3(56, 0, z - 4),
+        end: new THREE.Vector3(-176, 0, z - 4),
         dir: new THREE.Vector3(-1, 0, 0),
         type: 'street'
       });
     });
+
+    // 3. Continuous Outer Perimeter Boulevard Sidewalks & Curbs
+    // Encloses the squared perimeter road so there are NO open/blank dead endings.
+    const curbMat = new THREE.MeshStandardMaterial({
+      color: 0x282c34,
+      metalness: 0.6,
+      roughness: 0.4
+    });
+
+    // Outer Perimeter Sidewalks:
+    // North outer sidewalk
+    const northSw = new THREE.Mesh(new THREE.PlaneGeometry(264, sidewalkWidth), this.sidewalkMat);
+    northSw.rotation.x = -Math.PI / 2;
+    northSw.position.set(-60, 0.12, -210);
+    northSw.receiveShadow = true;
+    this.scene.add(northSw);
+
+    // South outer sidewalk
+    const southSw = new THREE.Mesh(new THREE.PlaneGeometry(264, sidewalkWidth), this.sidewalkMat);
+    southSw.rotation.x = -Math.PI / 2;
+    southSw.position.set(-60, 0.12, 210);
+    southSw.receiveShadow = true;
+    this.scene.add(southSw);
+
+    // West outer sidewalk
+    const westSw = new THREE.Mesh(new THREE.PlaneGeometry(sidewalkWidth, 424), this.sidewalkMat);
+    westSw.rotation.x = -Math.PI / 2;
+    westSw.position.set(-190, 0.12, 0);
+    westSw.receiveShadow = true;
+    this.scene.add(westSw);
+
+    // East outer sidewalk
+    const eastSw = new THREE.Mesh(new THREE.PlaneGeometry(sidewalkWidth, 424), this.sidewalkMat);
+    eastSw.rotation.x = -Math.PI / 2;
+    eastSw.position.set(70, 0.12, 0);
+    eastSw.receiveShadow = true;
+    this.scene.add(eastSw);
+
+    // Raised outer curb borders (smooth granite curb barrier along perimeter)
+    const northCurb = new THREE.Mesh(new THREE.BoxGeometry(266, 0.35, 0.45), curbMat);
+    northCurb.position.set(-60, 0.18, -212.2);
+    northCurb.receiveShadow = true;
+    this.scene.add(northCurb);
+
+    const southCurb = new THREE.Mesh(new THREE.BoxGeometry(266, 0.35, 0.45), curbMat);
+    southCurb.position.set(-60, 0.18, 212.2);
+    southCurb.receiveShadow = true;
+    this.scene.add(southCurb);
+
+    const westCurb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 426), curbMat);
+    westCurb.position.set(-192.2, 0.18, 0);
+    westCurb.receiveShadow = true;
+    this.scene.add(westCurb);
+
+    const eastCurb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 426), curbMat);
+    eastCurb.position.set(72.2, 0.18, 0);
+    eastCurb.receiveShadow = true;
+    this.scene.add(eastCurb);
   }
 
   buildBuildings() {
@@ -263,21 +331,112 @@ export class City {
     this.colliders.push({ box, type: 'building', name: signText || 'Building' });
   }
 
-  buildStreetProps() {
-    // 1. Iconic Vice City Palm Trees along Ocean Drive and Avenues
-    for (let z = -230; z <= 230; z += 25) {
-      this.createPalmTree(74, z);
-      this.createPalmTree(116, z);
-      if (Math.random() > 0.4) {
-        this.createStreetLamp(71, z + 12);
+  // Helper: check if a coordinate lies within a driving road lane or intersection clear zone
+  isRoadOrClearZone(x, z, margin = 4.0) {
+    const avenueX = [-180, -60, 60];
+    const streetZ = [-200, -100, 0, 100, 200];
+    const roadHalfWidth = 8.0;
+
+    // Check Avenue corridor
+    for (let i = 0; i < avenueX.length; i++) {
+      const ax = avenueX[i];
+      if (Math.abs(x - ax) < roadHalfWidth + margin && z >= -208 - margin && z <= 208 + margin) {
+        return true;
       }
     }
 
-    // Midtown & Downtown street lamps
-    [-170, -50].forEach(x => {
-      for (let z = -220; z <= 220; z += 40) {
-        this.createStreetLamp(x, z);
+    // Check Cross Street corridor
+    for (let j = 0; j < streetZ.length; j++) {
+      const sz = streetZ[j];
+      if (Math.abs(z - sz) < roadHalfWidth + margin && x >= -188 - margin && x <= 68 + margin) {
+        return true;
       }
+    }
+
+    return false;
+  }
+
+  buildStreetProps() {
+    // 1. PALM TREES: Placed exclusively in safe park blocks, courtyards, and beach strips.
+    // Absolutely NO trees within 14 meters of any road lane or intersection!
+    
+    // A. Ocean Drive Beach Strip (completely safe on the sand east of hotels, X >= 120)
+    for (let z = -215; z <= 215; z += 24) {
+      this.createPalmTree(122, z);
+      this.createPalmTree(145, z);
+    }
+
+    // B. Ocean Drive Sidewalk Promenade (X = 76, placed strictly mid-block away from cross streets)
+    const safeMidblockZ = [
+      -165, -150, -135, // between -200 and -100
+      -65, -50, -35,    // between -100 and 0
+      35, 50, 65,       // between 0 and 100
+      135, 150, 165     // between 100 and 200
+    ];
+    safeMidblockZ.forEach(z => {
+      if (!this.isRoadOrClearZone(76, z, 5.0)) {
+        this.createPalmTree(76, z);
+      }
+    });
+
+    // C. Midtown Courtyard Green Plazas (between buildings, X = +/-26)
+    [-150, -50, 50, 150].forEach(z => {
+      [-26, 26].forEach(x => {
+        if (!this.isRoadOrClearZone(x, z, 5.0)) {
+          this.createPalmTree(x, z);
+        }
+      });
+    });
+
+    // D. Downtown Tower Plazas (X = -90 and -150)
+    [-150, -50, 50, 150].forEach(z => {
+      [-90, -150].forEach(x => {
+        if (!this.isRoadOrClearZone(x, z, 5.0)) {
+          this.createPalmTree(x, z);
+        }
+      });
+    });
+
+    // E. Outer Perimeter Green Park Buffers (well beyond the outer curb)
+    [-160, -100, -20, 40].forEach(x => {
+      this.createPalmTree(x, -225);
+      this.createPalmTree(x, 225);
+    });
+    [-160, -80, 80, 160].forEach(z => {
+      this.createPalmTree(-204, z);
+    });
+
+    // 2. STREET LAMPS: Placed along sidewalks at safe mid-block coordinates.
+    // Guaranteed never to encroach on road lanes or intersections.
+    
+    // Along Ocean Drive sidewalk
+    safeMidblockZ.forEach(z => {
+      if (Math.abs(z % 30) < 10) {
+        if (!this.isRoadOrClearZone(71, z, 2.5)) {
+          this.createStreetLamp(71, z);
+        }
+      }
+    });
+
+    // Along Midtown & Downtown Avenue sidewalks
+    [-170, -50].forEach(x => {
+      [-150, -50, 50, 150].forEach(z => {
+        if (!this.isRoadOrClearZone(x, z, 2.5)) {
+          this.createStreetLamp(x, z);
+        }
+      });
+    });
+
+    // Along Cross Street sidewalks (midway between avenues at X = -120 and X = 0)
+    [-200, -100, 0, 100, 200].forEach(sz => {
+      [-120, 0].forEach(x => {
+        [-10, 10].forEach(offset => {
+          const lz = sz + offset;
+          if (!this.isRoadOrClearZone(x, lz, 2.0)) {
+            this.createStreetLamp(x, lz);
+          }
+        });
+      });
     });
   }
 
