@@ -398,7 +398,7 @@ export class VehicleManager {
     }
   }
 
-  update(delta, playerVehicle, colliders, playerPos, isPlayerOnFoot) {
+  update(delta, playerVehicle, colliders, playerPos, isPlayerOnFoot, policeOfficers = [], npcs = [], trafficSystem = null) {
     // 1. Update active crash spark particles
     for (let s = this.sparks.length - 1; s >= 0; s--) {
       const sp = this.sparks[s];
@@ -460,7 +460,7 @@ export class VehicleManager {
       }
     }
 
-    // 3. AMBIENT CAR TRAFFIC AI & STOPPING FOR PLAYER
+    // 3. AMBIENT CAR TRAFFIC AI: TRAFFIC LIGHTS & STOPPING FOR POLICE / PEDESTRIANS
     this.vehicles.forEach(veh => {
       if (veh === playerVehicle) return; // Player drives this one
 
@@ -477,7 +477,72 @@ export class VehicleManager {
 
       let slowDown = false;
 
-      // A. Check if PLAYER IS STANDING ON THE ROAD in front of the car
+      // A. Check TRAFFIC LIGHT at upcoming intersection
+      if (trafficSystem) {
+        const lightCheck = trafficSystem.shouldVehicleStopForLight(veh.mesh.position, veh.mesh.rotation.y);
+        if (lightCheck.shouldStop) {
+          slowDown = true;
+          inputs.forward = false;
+          inputs.handbrake = true;
+          veh.speed = Math.max(0, veh.speed - 36 * delta);
+        }
+      }
+
+      // B. Check if a POLICE OFFICER is on the road in front of the car
+      if (policeOfficers && policeOfficers.length > 0) {
+        for (let i = 0; i < policeOfficers.length; i++) {
+          const cop = policeOfficers[i];
+          if (!cop.isDead && cop.mesh) {
+            const toCop = cop.mesh.position.clone().sub(veh.mesh.position);
+            const fwdDist = toCop.dot(forwardVec);
+            const latDist = Math.abs(toCop.dot(rightVec));
+
+            // Officer is in vehicle lane ahead (within 18m)
+            if (fwdDist > 0.5 && fwdDist < 18.0 && latDist < 3.2) {
+              slowDown = true;
+              inputs.forward = false;
+              inputs.handbrake = true;
+              veh.speed = Math.max(0, veh.speed - 36 * delta);
+
+              veh.honkTimer = (veh.honkTimer || 0) + delta;
+              if (veh.honkTimer > 2.2) {
+                veh.honkTimer = 0;
+                soundEngine.playHorn();
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // C. Check if a PEDESTRIAN / NPC is on the road or crosswalk in front
+      if (npcs && npcs.length > 0) {
+        for (let i = 0; i < npcs.length; i++) {
+          const npc = npcs[i];
+          if (!npc.isDead && npc.mesh) {
+            const toNpc = npc.mesh.position.clone().sub(veh.mesh.position);
+            const fwdDist = toNpc.dot(forwardVec);
+            const latDist = Math.abs(toNpc.dot(rightVec));
+
+            // Pedestrian is in vehicle lane ahead (within 16m)
+            if (fwdDist > 0.5 && fwdDist < 16.0 && latDist < 3.0) {
+              slowDown = true;
+              inputs.forward = false;
+              inputs.handbrake = true;
+              veh.speed = Math.max(0, veh.speed - 36 * delta);
+
+              veh.honkTimer = (veh.honkTimer || 0) + delta;
+              if (veh.honkTimer > 2.5) {
+                veh.honkTimer = 0;
+                soundEngine.playHorn();
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // D. Check if PLAYER IS STANDING ON THE ROAD in front of the car
       if (isPlayerOnFoot && playerPos) {
         const toPlayer = playerPos.clone().sub(veh.mesh.position);
         const fwdDist = toPlayer.dot(forwardVec);
@@ -499,7 +564,7 @@ export class VehicleManager {
         }
       }
 
-      // B. Check if ANOTHER CAR is stopped or driving slowly in front
+      // E. Check if ANOTHER CAR is stopped or driving slowly in front
       this.vehicles.forEach(other => {
         if (other !== veh) {
           const dist = veh.mesh.position.distanceTo(other.mesh.position);
@@ -586,6 +651,10 @@ export class VehicleManager {
         const localZ = dx * sinA + dz * cosA;
 
         if (Math.abs(localX) < halfW && localZ >= minLocalZ && localZ <= maxLocalZ) {
+          const isPlayerCar = (veh === playerVehicle || veh.isPlayerOccupied);
+          // Ambient cars brake for pedestrians and police; they do not kill when driving normally
+          if (!isPlayerCar && speed < 5.0) return;
+
           const wasAlive = !target.isDead;
 
           // 1. Instant fatality damage

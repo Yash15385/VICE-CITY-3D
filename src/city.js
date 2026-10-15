@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TextureFactory } from './textures.js';
+import { TrafficSystem } from './traffic.js';
 
 export class City {
   constructor(scene) {
@@ -15,6 +16,7 @@ export class City {
     this.initMaterials();
     this.buildGroundAndOcean();
     this.buildRoadsAndSidewalks();
+    this.traffic = new TrafficSystem(this.scene);
     this.buildBuildings();
     this.buildStreetProps();
     this.buildInteractiveLocations();
@@ -478,6 +480,11 @@ export class City {
   }
 
   update(delta, time) {
+    // Update Traffic Lights & Signal cycles
+    if (this.traffic) {
+      this.traffic.update(delta);
+    }
+
     // Animate gentle ocean wave motion
     if (this.oceanWater) {
       this.oceanWater.position.y = -1.2 + Math.sin(time * 1.5) * 0.15;

@@ -105,7 +105,7 @@ class Game {
     this.city = new City(this.scene);
     this.player = new Player(this.scene, this.camera, this.canvas);
     this.vehicles = new VehicleManager(this.scene, this.city);
-    this.npcs = new NPCManager(this.scene, this.city);
+    this.npcs = new NPCManager(this.scene, this.city, this.city.traffic);
     this.police = new PoliceSystem(this.scene, this.vehicles);
     this.weapons = new WeaponManager(this.scene, this.camera);
   }
@@ -422,8 +422,17 @@ class Game {
         : this.player.mesh.position;
       const isPlayerOnFoot = !this.player.inVehicle;
 
-      // 4. Update Ambient Vehicles & Traffic (with crash physics and stopping for player on foot!)
-      this.vehicles.update(delta, this.player.currentVehicle, this.city.colliders, playerPos, isPlayerOnFoot);
+      // 4. Update Ambient Vehicles & Traffic (with crash physics, traffic lights, and stopping for police, NPCs, and player!)
+      this.vehicles.update(
+        delta,
+        this.player.currentVehicle,
+        this.city.colliders,
+        playerPos,
+        isPlayerOnFoot,
+        this.police.officers,
+        this.npcs.npcs,
+        this.city.traffic
+      );
 
       // Check Vehicle to Pedestrian collisions (running over NPCs & Police)
       this.vehicles.checkPedestrianCollisions(

@@ -2,9 +2,14 @@ import * as THREE from 'three';
 import { soundEngine } from './audio.js';
 
 export class NPC {
-  constructor(scene, position, pathNodes = []) {
+  constructor(scene, position, sidewalkGraph = null, trafficSystem = null, initialNode = null) {
     this.scene = scene;
-    this.pathNodes = pathNodes;
+    this.sidewalkGraph = sidewalkGraph;
+    this.trafficSystem = trafficSystem;
+    this.currentNode = initialNode;
+    this.previousNode = null;
+    this.targetNode = null;
+
     this.mesh = new THREE.Group();
     this.mesh.position.copy(position);
 
@@ -15,14 +20,19 @@ export class NPC {
     this.runSpeed = 6.8 + Math.random() * 1.5;
     this.currentSpeed = this.walkSpeed;
 
-    this.targetNode = this.getRandomNode();
     this.heading = Math.random() * Math.PI * 2;
     this.animTime = Math.random() * 10;
     this.fleeTimer = 0;
     this.moneyDropped = false;
+    this.waitTimer = 0;
 
     this.buildCharacterMesh();
     this.scene.add(this.mesh);
+
+    // Initial target node
+    if (this.currentNode) {
+      this.targetNode = this.pickNextNode(this.currentNode);
+    }
   }
 
   buildCharacterMesh() {
@@ -38,7 +48,6 @@ export class NPC {
     const skinMat = new THREE.MeshStandardMaterial({ color: skinCol, roughness: 0.8 });
     const shirtMat = new THREE.MeshStandardMaterial({ color: shirtCol, roughness: 0.7 });
     const pantsMat = new THREE.MeshStandardMaterial({ color: pantsCol, roughness: 0.7 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
 
     // Torso
     const torsoGeo = new THREE.BoxGeometry(0.55, 0.75, 0.32);
@@ -87,15 +96,50 @@ export class NPC {
     this.mesh.add(this.rightLeg);
   }
 
-  getRandomNode() {
-    if (this.pathNodes.length === 0) {
-      return new THREE.Vector3(
-        (Math.random() - 0.5) * 150,
-        0.5,
-        (Math.random() - 0.5) * 200
-      );
+  pickNextNode(currentNode) {
+    if (!currentNode || !currentNode.neighbors || currentNode.neighbors.length === 0 || !this.sidewalkGraph) {
+      return null;
     }
-    return this.pathNodes[Math.floor(Math.random() * this.pathNodes.length)];
+
+    const options = [];
+
+    for (let i = 0; i < currentNode.neighbors.length; i++) {
+      const neighborInfo = currentNode.neighbors[i];
+      const targetNode = this.sidewalkGraph.get(neighborInfo.targetId);
+      if (!targetNode) continue;
+
+      if (neighborInfo.isCrosswalk) {
+        // ZEBRA CROSSING: Check if traffic light allows pedestrians to cross!
+        if (this.trafficSystem && this.trafficSystem.canPedestrianCross(neighborInfo.intersectionId, neighborInfo.crosswalkSide)) {
+          // Green walk signal: cross zebra crossing
+          options.push({ node: targetNode, isCrosswalk: true, weight: 2.2 });
+        }
+      } else {
+        // Sidewalk neighbor: prefer continuing forward rather than immediate 180 backtrack
+        const isBacktrack = this.previousNode && targetNode.id === this.previousNode.id;
+        options.push({
+          node: targetNode,
+          isCrosswalk: false,
+          weight: isBacktrack ? 0.25 : 1.5
+        });
+      }
+    }
+
+    if (options.length === 0) {
+      return null; // Wait on sidewalk corner
+    }
+
+    // Weighted random selection
+    const totalWeight = options.reduce((sum, opt) => sum + opt.weight, 0);
+    let rand = Math.random() * totalWeight;
+    for (let i = 0; i < options.length; i++) {
+      rand -= options[i].weight;
+      if (rand <= 0) {
+        return options[i].node;
+      }
+    }
+
+    return options[0].node;
   }
 
   takeDamage(amount, hitSourcePos = null) {
@@ -168,7 +212,6 @@ export class NPC {
 
   update(delta, playerPos, isPlayerAimingNear) {
     if (this.isDead) {
-      // Wallet bob / spin if exists
       if (this.walletMesh) {
         this.walletMesh.rotation.y += delta * 2.5;
       }
@@ -194,18 +237,33 @@ export class NPC {
         this.rightArm.rotation.x = -Math.PI * 0.8;
       } else {
         this.state = 'WANDER';
-        this.currentSpeed = this.walkSpeed;
       }
     }
 
     if (this.state === 'WANDER') {
-      // Navigate towards target sidewalk waypoint
-      if (!this.targetNode || this.mesh.position.distanceTo(this.targetNode) < 3.0) {
-        this.targetNode = this.getRandomNode();
+      // Sidewalk & Zebra Crossing Path Navigation
+      if (!this.targetNode || this.mesh.position.distanceTo(this.targetNode.pos) < 1.3) {
+        if (this.targetNode) {
+          this.previousNode = this.currentNode;
+          this.currentNode = this.targetNode;
+        }
+        this.targetNode = this.pickNextNode(this.currentNode);
       }
-      const dir = this.targetNode.clone().sub(this.mesh.position);
-      dir.y = 0;
-      this.heading = Math.atan2(dir.x, dir.z);
+
+      if (this.targetNode) {
+        const dir = this.targetNode.pos.clone().sub(this.mesh.position);
+        dir.y = 0;
+        this.heading = Math.atan2(dir.x, dir.z);
+        this.currentSpeed = this.walkSpeed;
+      } else {
+        // Waiting at zebra crossing on sidewalk corner for signal to change
+        this.currentSpeed = 0;
+        this.waitTimer += delta;
+        if (this.waitTimer > 1.2) {
+          this.waitTimer = 0;
+          this.targetNode = this.pickNextNode(this.currentNode);
+        }
+      }
     }
 
     // Move in heading direction
@@ -226,28 +284,32 @@ export class NPC {
 }
 
 export class NPCManager {
-  constructor(scene, city) {
+  constructor(scene, city, trafficSystem = null) {
     this.scene = scene;
     this.city = city;
+    this.trafficSystem = trafficSystem || city.traffic;
     this.npcs = [];
     this.spawnPedestrians(35);
   }
 
   spawnPedestrians(count) {
-    const nodes = this.city.pedestrianPaths;
+    const nodes = this.trafficSystem ? this.trafficSystem.sidewalkNodes : [];
+    if (!nodes || nodes.length === 0) return;
+
     for (let i = 0; i < count; i++) {
-      let spawnPos;
-      if (nodes.length > 0) {
-        const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
-        spawnPos = randomNode.clone().add(new THREE.Vector3(
-          (Math.random() - 0.5) * 3,
-          0,
-          (Math.random() - 0.5) * 3
-        ));
-      } else {
-        spawnPos = new THREE.Vector3((Math.random() - 0.5) * 150, 0.5, (Math.random() - 0.5) * 200);
-      }
-      const npc = new NPC(this.scene, spawnPos, nodes);
+      const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
+      const spawnPos = randomNode.pos.clone().add(new THREE.Vector3(
+        (Math.random() - 0.5) * 1.5,
+        0,
+        (Math.random() - 0.5) * 1.5
+      ));
+      const npc = new NPC(
+        this.scene,
+        spawnPos,
+        this.trafficSystem.sidewalkGraph,
+        this.trafficSystem,
+        randomNode
+      );
       this.npcs.push(npc);
     }
   }
